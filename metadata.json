@@ -1,0 +1,7 @@
+{
+  "name": "Finger Dance Hero",
+  "description": "A rhythmic hand-gesture game using MediaPipe Hands for finger dexterity training. Play like DDR but with your fingers!",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
