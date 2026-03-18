@@ -131,10 +131,23 @@ const GameView: React.FC<GameViewProps> = ({ selectedSong, handPreference, onUpd
 
             // 動態獨立閾值設定
             let pinchThreshold = PINCH_THRESHOLD_3D;
-            // 手機版畫面長寬比與電腦不同，距離會被放大，讓整體感應稍微嚴格一點 
-            if (window.innerWidth < 768) pinchThreshold *= 0.85;
-            // 食指 (index 0) 物理上離大拇指根部最近，鏡頭最容易擠在一起誤判，再額外嚴格化
-            if (index === 0) pinchThreshold *= 0.75;
+            const isMobile = window.innerWidth < 768;
+            
+            if (isMobile) {
+              // 手機版畫面受解析度與站位影響，整體距離感應必須大幅拉緊
+              pinchThreshold *= 0.65; 
+              // 食指最靠近手掌內側，極易連續誤判
+              if (index === 0) pinchThreshold *= 0.6;
+              // 中指同樣容易受廣角鏡頭扭曲干擾
+              else if (index === 1) pinchThreshold *= 0.75;
+            } else {
+              // 電腦板針對食指稍微調緊即可
+              if (index === 0) pinchThreshold *= 0.8;
+            }
+
+            // 遲滯機制 (Hysteresis)：如果上一幀已經是捏合狀態，放寬鬆開的標準，防止邊界反覆抖動連發
+            const isCurrentlyPinched = wasPinchingRef.current[index];
+            const effectiveThreshold = isCurrentlyPinched ? pinchThreshold * 1.5 : pinchThreshold;
 
             // 視覺回饋：當手指接近時，顯示連線（磁吸感）
             if (dist < PRE_PINCH_THRESHOLD) {
@@ -142,8 +155,8 @@ const GameView: React.FC<GameViewProps> = ({ selectedSong, handPreference, onUpd
               ctx.beginPath();
               ctx.moveTo(thx, thy);
               ctx.lineTo(tx, ty);
-              ctx.strokeStyle = dist < pinchThreshold ? TRACK_COLORS[index] : `rgba(255,255,255,${alpha * 0.5})`;
-              ctx.lineWidth = dist < pinchThreshold ? 6 : 2;
+              ctx.strokeStyle = dist < effectiveThreshold ? TRACK_COLORS[index] : `rgba(255,255,255,${alpha * 0.5})`;
+              ctx.lineWidth = dist < effectiveThreshold ? 6 : 2;
               ctx.stroke();
 
               // 在指尖繪製偵測環
@@ -154,8 +167,8 @@ const GameView: React.FC<GameViewProps> = ({ selectedSong, handPreference, onUpd
               ctx.stroke();
             }
 
-            // 判定觸發
-            if (dist < pinchThreshold) {
+            // 判定觸發 (使用 effectiveThreshold 防止連發抖動)
+            if (dist < effectiveThreshold) {
               pRef[index] = true;
               
               // 觸發時的擴散圓圈視覺
