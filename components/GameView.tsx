@@ -18,20 +18,24 @@ import { Note, Feedback } from '../types';
 
 interface GameViewProps {
   selectedSong: Song;
+  handPreference: 'right' | 'left';
   onUpdateScore: (score: number, combo: number) => void;
   onGameOver: (finalScore: number, finalMaxCombo: number) => void;
   onRestart: () => void;
+  onReturnMenu: () => void;
 }
 
-const GameView: React.FC<GameViewProps> = ({ selectedSong, onUpdateScore, onGameOver, onRestart }) => {
+const GameView: React.FC<GameViewProps> = ({ selectedSong, handPreference, onUpdateScore, onGameOver, onRestart, onReturnMenu }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameCanvasRef = useRef<HTMLCanvasElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   
   const [isLoaded, setIsLoaded] = useState(false);
   const [isReadyToStart, setIsReadyToStart] = useState(false); 
   const [countdown, setCountdown] = useState<number | string | null>(null);
   const [gameTime, setGameTime] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
   
   const scoreRef = useRef(0);
   const comboRef = useRef(0);
@@ -51,6 +55,14 @@ const GameView: React.FC<GameViewProps> = ({ selectedSong, onUpdateScore, onGame
       id: i, track: n.track, targetTime: n.time, hit: false, missed: false 
     }));
   }, [selectedSong]);
+
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    };
+  }, []);
 
   const addFeedback = (text: string, color: string) => {
     feedbacksRef.current.push({ text, color, opacity: 1, y: JUDGMENT_LINE_Y - 50, id: Math.random() });
@@ -187,6 +199,10 @@ const GameView: React.FC<GameViewProps> = ({ selectedSong, onUpdateScore, onGame
         setCountdown(null);
         gameStartTimeRef.current = performance.now();
         gameActiveRef.current = true;
+        if (audioRef.current) {
+          audioRef.current.currentTime = 0;
+          audioRef.current.play().catch(e => console.error("Audio playback error:", e));
+        }
       } else {
         setCountdown(count);
       }
@@ -202,9 +218,45 @@ const GameView: React.FC<GameViewProps> = ({ selectedSong, onUpdateScore, onGame
     ctx.save();
     ctx.scale(2, 2);
     ctx.fillStyle = '#020617';
+    ctx.globalAlpha = gameActiveRef.current ? 1 : 0.0;
     ctx.fillRect(0, 0, 500, 1000);
+    ctx.globalAlpha = 1;
+
+    const trackWidth = 500 / TRACK_COUNT;
+
+    for (let col = 0; col < TRACK_COUNT; col++) {
+      const fingerIndex = handPreference === 'left' ? 3 - col : col;
+
+      if (!gameActiveRef.current && isPinchingRef.current[fingerIndex] && !wasPinchingRef.current[fingerIndex]) {
+        hitFlashRef.current[fingerIndex] = 0.5;
+      }
+
+      ctx.fillStyle = 'rgba(255,255,255,0.015)';
+      ctx.fillRect(col * trackWidth, 0, trackWidth, 1000);
+      
+      if (isPinchingRef.current[fingerIndex]) {
+        ctx.fillStyle = `${TRACK_COLORS[fingerIndex]}33`;
+        ctx.fillRect(col * trackWidth, 0, trackWidth, 1000);
+      }
+
+      if (hitFlashRef.current[fingerIndex] > 0) {
+        ctx.fillStyle = `${TRACK_COLORS[fingerIndex]}${Math.floor(hitFlashRef.current[fingerIndex] * 60).toString(16).padStart(2, '0')}`;
+        ctx.fillRect(col * trackWidth, 0, trackWidth, 1000);
+        hitFlashRef.current[fingerIndex] -= 0.05;
+      }
+
+      ctx.strokeStyle = isPinchingRef.current[fingerIndex] ? TRACK_COLORS[fingerIndex] : 'rgba(255,255,255,0.1)';
+      ctx.lineWidth = isPinchingRef.current[fingerIndex] ? 12 : 2;
+      ctx.strokeRect(col * trackWidth + 15, JUDGMENT_LINE_Y - 45, trackWidth - 30, 90);
+      
+      ctx.fillStyle = isPinchingRef.current[fingerIndex] ? TRACK_COLORS[fingerIndex] : 'rgba(255,255,255,0.4)';
+      ctx.font = '900 16px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(TRACK_LABELS[fingerIndex], col * trackWidth + trackWidth/2, JUDGMENT_LINE_Y + 85);
+    }
 
     if (!gameActiveRef.current || gameStartTimeRef.current === null) {
+      for (let i = 0; i < TRACK_COUNT; i++) wasPinchingRef.current[i] = isPinchingRef.current[i];
       ctx.restore();
       animationFrameRef.current = requestAnimationFrame(update);
       return;
@@ -212,38 +264,23 @@ const GameView: React.FC<GameViewProps> = ({ selectedSong, onUpdateScore, onGame
 
     const currentTime = performance.now() - gameStartTimeRef.current;
     setGameTime(currentTime);
-    const trackWidth = 500 / TRACK_COUNT;
+    
+    // Check if we are in the last 15 seconds
+    const currentTimeLeft = Math.max(0, Math.ceil((GAME_DURATION_MS - currentTime) / 1000));
+    const isDoubleScore = currentTimeLeft <= 15 && currentTimeLeft > 0;
 
-    for (let i = 0; i < TRACK_COUNT; i++) {
-      ctx.fillStyle = 'rgba(255,255,255,0.015)';
-      ctx.fillRect(i * trackWidth, 0, trackWidth, 1000);
-      
-      if (isPinchingRef.current[i]) {
-        ctx.fillStyle = `${TRACK_COLORS[i]}33`;
-        ctx.fillRect(i * trackWidth, 0, trackWidth, 1000);
-      }
-
-      if (hitFlashRef.current[i] > 0) {
-        ctx.fillStyle = `${TRACK_COLORS[i]}${Math.floor(hitFlashRef.current[i] * 60).toString(16).padStart(2, '0')}`;
-        ctx.fillRect(i * trackWidth, 0, trackWidth, 1000);
-        hitFlashRef.current[i] -= 0.05;
-      }
-
-      ctx.strokeStyle = isPinchingRef.current[i] ? TRACK_COLORS[i] : 'rgba(255,255,255,0.1)';
-      ctx.lineWidth = isPinchingRef.current[i] ? 12 : 2;
-      ctx.strokeRect(i * trackWidth + 15, JUDGMENT_LINE_Y - 45, trackWidth - 30, 90);
-      
-      ctx.fillStyle = isPinchingRef.current[i] ? TRACK_COLORS[i] : 'rgba(255,255,255,0.4)';
-      ctx.font = '900 16px Inter, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(TRACK_LABELS[i], i * trackWidth + trackWidth/2, JUDGMENT_LINE_Y + 85);
-    }
+    const trackHitThisFrame = [false, false, false, false];
+    
+    // 以 120 BPM 當作基準掉落速度，BPM 越高掉落越快
+    const dynamicScrollSpeed = SCROLL_SPEED * (selectedSong.bpm / 120);
 
     notesRef.current.forEach(note => {
       if (note.hit || note.missed) return;
       
       const timeDiff = note.targetTime - currentTime;
-      const y = JUDGMENT_LINE_Y - (timeDiff * SCROLL_SPEED);
+      const y = JUDGMENT_LINE_Y - (timeDiff * dynamicScrollSpeed);
+
+      const col = handPreference === 'left' ? 3 - note.track : note.track;
 
       if (y > -200 && y < 1200) {
         ctx.save();
@@ -252,11 +289,11 @@ const GameView: React.FC<GameViewProps> = ({ selectedSong, onUpdateScore, onGame
         ctx.shadowColor = TRACK_COLORS[note.track];
         
         ctx.beginPath();
-        ctx.roundRect(note.track * trackWidth + 12, y - 25, trackWidth - 24, 50, 15);
+        ctx.roundRect(col * trackWidth + 12, y - 25, trackWidth - 24, 50, 15);
         ctx.fill();
         
         ctx.fillStyle = 'rgba(255,255,255,0.6)';
-        ctx.fillRect(note.track * trackWidth + 20, y - 12, trackWidth - 40, 6);
+        ctx.fillRect(col * trackWidth + 20, y - 12, trackWidth - 40, 6);
         ctx.restore();
       }
 
@@ -266,28 +303,44 @@ const GameView: React.FC<GameViewProps> = ({ selectedSong, onUpdateScore, onGame
       if (isPinching && !wasPinching) {
         const absDiff = Math.abs(timeDiff);
         if (absDiff <= JUDGMENT_WINDOWS.PERFECT) {
-          note.hit = true; scoreRef.current += 1000; comboRef.current += 1;
+          note.hit = true; 
+          scoreRef.current += isDoubleScore ? 2000 : 1000; 
+          comboRef.current += 1;
           maxComboRef.current = Math.max(maxComboRef.current, comboRef.current);
-          addFeedback("PERFECT", "#22d3ee");
+          addFeedback(isDoubleScore ? "PERFECT x2" : "PERFECT", isDoubleScore ? "#facc15" : "#22d3ee");
           hitFlashRef.current[note.track] = 1;
+          trackHitThisFrame[note.track] = true;
           onUpdateScore(scoreRef.current, comboRef.current);
         } else if (absDiff <= JUDGMENT_WINDOWS.GOOD) {
-          note.hit = true; scoreRef.current += 500; comboRef.current += 1;
+          note.hit = true; 
+          scoreRef.current += isDoubleScore ? 1000 : 500; 
+          comboRef.current += 1;
           maxComboRef.current = Math.max(maxComboRef.current, comboRef.current);
-          addFeedback("GREAT", "#4ade80");
+          addFeedback(isDoubleScore ? "GREAT x2" : "GREAT", isDoubleScore ? "#fde047" : "#4ade80");
           hitFlashRef.current[note.track] = 0.8;
+          trackHitThisFrame[note.track] = true;
           onUpdateScore(scoreRef.current, comboRef.current);
         }
       }
 
       if (timeDiff < -JUDGMENT_WINDOWS.GOOD) {
-        note.missed = true; comboRef.current = 0;
+        note.missed = true; 
+        comboRef.current = 0;
+        scoreRef.current = Math.max(0, scoreRef.current - 300);
         addFeedback("MISS", "#f43f5e");
         onUpdateScore(scoreRef.current, comboRef.current);
       }
     });
 
-    for (let i = 0; i < TRACK_COUNT; i++) wasPinchingRef.current[i] = isPinchingRef.current[i];
+    for (let i = 0; i < TRACK_COUNT; i++) {
+      if (isPinchingRef.current[i] && !wasPinchingRef.current[i] && !trackHitThisFrame[i]) {
+        comboRef.current = 0;
+        scoreRef.current = Math.max(0, scoreRef.current - 500);
+        addFeedback("BAD", "#ef4444");
+        onUpdateScore(scoreRef.current, comboRef.current);
+      }
+      wasPinchingRef.current[i] = isPinchingRef.current[i];
+    }
 
     feedbacksRef.current = feedbacksRef.current.filter(f => f.opacity > 0);
     feedbacksRef.current.forEach(f => {
@@ -302,6 +355,7 @@ const GameView: React.FC<GameViewProps> = ({ selectedSong, onUpdateScore, onGame
 
     if (currentTime >= GAME_DURATION_MS) {
       gameActiveRef.current = false;
+      if (audioRef.current) audioRef.current.pause();
       onGameOver(scoreRef.current, maxComboRef.current);
     }
 
@@ -316,24 +370,41 @@ const GameView: React.FC<GameViewProps> = ({ selectedSong, onUpdateScore, onGame
     };
   }, [update]);
 
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.muted = isMuted;
+    }
+  }, [isMuted]);
+
   const timeLeft = Math.max(0, Math.ceil((GAME_DURATION_MS - gameTime) / 1000));
+  const isDoubleScorePhase = timeLeft <= 15 && gameActiveRef.current;
+  const isGamePlaying = isLoaded && !isReadyToStart && countdown === null;
 
   return (
     <div className="relative w-full h-full flex items-center justify-center">
+      <audio ref={audioRef} src={selectedSong.url} crossOrigin="anonymous" preload="auto" />
       <video ref={videoRef} className="hidden" playsInline />
       
       <canvas 
         ref={canvasRef} 
         width={1280} 
         height={720} 
-        className="absolute inset-0 w-full h-full object-cover z-10 opacity-60 pointer-events-none" 
+        className={`absolute inset-0 w-full h-full object-cover z-10 pointer-events-none transition-all duration-1000 ${isGamePlaying ? 'opacity-40' : 'opacity-100'}`}
       />
       
-      <div className="relative w-full max-w-lg aspect-[9/16] bg-slate-900 border-x border-white/10 shadow-[0_0_100px_rgba(0,0,0,1)] z-20 overflow-hidden">
+      {isDoubleScorePhase && (
+        <div className="absolute inset-0 z-10 pointer-events-none bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(234,179,8,0.2)_100%)] animate-pulse mix-blend-screen" />
+      )}
+      
+      <div className={`relative w-full max-w-lg aspect-[9/16] border-x ${isDoubleScorePhase ? 'border-yellow-500/50 shadow-[0_0_150px_rgba(234,179,8,0.5)]' : 'border-white/10 shadow-[0_0_100px_rgba(0,0,0,1)]'} ${isGamePlaying ? 'bg-slate-900' : 'bg-slate-900/10'} z-20 overflow-hidden transition-all duration-1000`}>
          <div className="absolute top-0 left-0 w-full p-8 flex justify-center items-center z-30">
-            <div className="bg-slate-950/80 backdrop-blur-xl px-8 py-3 rounded-2xl border border-white/10 flex items-center gap-4">
-                <span className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em]">Neural Link Status</span>
-                <span className={`text-3xl font-black text-white tabular-nums ${timeLeft <= 10 ? 'text-rose-500 animate-pulse' : ''}`}>
+            <div className={`backdrop-blur-xl px-8 py-3 rounded-2xl border flex items-center gap-4 transition-all ${isDoubleScorePhase ? 'bg-yellow-950/80 border-yellow-500/50 shadow-[0_0_30px_rgba(234,179,8,0.3)]' : 'bg-slate-950/80 border-white/10'}`}>
+                {isDoubleScorePhase && (
+                  <span className="text-[12px] font-black tracking-widest text-yellow-400 animate-pulse">
+                    🔥 2X SCORE DOUBLE 🔥
+                  </span>
+                )}
+                <span className={`text-4xl font-black tabular-nums ${isDoubleScorePhase ? 'text-yellow-400 animate-pulse scale-125 drop-shadow-[0_0_15px_rgba(234,179,8,1)]' : 'text-white'}`}>
                   {timeLeft}s
                 </span>
             </div>
@@ -341,7 +412,7 @@ const GameView: React.FC<GameViewProps> = ({ selectedSong, onUpdateScore, onGame
 
          <div className="absolute top-0 left-0 w-full h-2 bg-white/5 z-30">
             <div 
-              className="h-full bg-gradient-to-r from-cyan-400 to-blue-500 shadow-[0_0_20px_#22d3ee] transition-all duration-100" 
+              className={`h-full shadow-[0_0_20px_#22d3ee] transition-all duration-100 ${isDoubleScorePhase ? 'bg-gradient-to-r from-yellow-400 to-amber-600 shadow-[0_0_20px_#facc15]' : 'bg-gradient-to-r from-cyan-400 to-blue-500'}`}
               style={{ width: `${Math.min(100, (gameTime / GAME_DURATION_MS) * 100)}%` }}
             />
          </div>
@@ -350,18 +421,17 @@ const GameView: React.FC<GameViewProps> = ({ selectedSong, onUpdateScore, onGame
       </div>
 
       {isReadyToStart && (
-        <div className="absolute inset-0 flex items-center justify-center bg-slate-950/90 z-[60]">
-          <div className="text-center p-12 bg-slate-900/90 border border-white/10 rounded-[3rem] backdrop-blur-3xl shadow-2xl max-w-sm mx-4">
-            <div className="w-20 h-20 bg-cyan-500/10 rounded-full flex items-center justify-center mb-8 mx-auto border border-cyan-500/20">
-              <svg className="w-10 h-10 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </div>
-            <h3 className="text-white font-black tracking-[0.2em] uppercase mb-4 text-base italic">Calibration Complete</h3>
-            <p className="text-slate-400 text-xs mb-10 uppercase tracking-[0.2em] leading-loose">Precision mode active.<br/>Magnetic pinch sensing initialized.</p>
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/20 backdrop-blur-sm z-[60]">
+          <div className="text-center p-8 bg-slate-900/60 border border-cyan-500/30 rounded-[2rem] shadow-[0_0_50px_rgba(6,182,212,0.2)] max-w-md mx-4 mt-20 backdrop-blur-xl">
+            <h3 className="text-cyan-400 font-black tracking-[0.2em] uppercase mb-4 text-xl italic">Calibration Complete</h3>
+            <p className="text-white text-sm mb-8 leading-loose tracking-widest">
+              Please try pinching your <span className="text-pink-400 font-bold">Thumb</span> with the <span className="text-cyan-400 font-bold">Other Fingers</span> in front of the camera.<br/>
+              The corresponding track will light up dynamically!<br/>
+              <span className="text-slate-400 text-xs">Test your gesture now. Click below when you are ready.</span>
+            </p>
             <button 
               onClick={handleUserClickToStart}
-              className="w-full py-6 bg-white text-slate-950 font-black rounded-full hover:scale-105 active:scale-95 transition-all shadow-2xl uppercase tracking-[0.4em] text-xs shadow-white/20"
+              className="w-full py-5 bg-white text-slate-950 font-black rounded-full hover:scale-105 active:scale-95 transition-all shadow-[0_0_30px_rgba(255,255,255,0.3)] uppercase tracking-[0.4em] text-sm"
             >
               Start Training
             </button>
@@ -370,12 +440,30 @@ const GameView: React.FC<GameViewProps> = ({ selectedSong, onUpdateScore, onGame
       )}
 
       {isLoaded && !isReadyToStart && countdown === null && (
-        <button 
-          onClick={onRestart}
-          className="absolute top-8 right-8 z-[70] px-8 py-3 bg-slate-800/60 backdrop-blur-lg border border-white/10 text-white font-black text-[10px] rounded-full hover:bg-white hover:text-slate-950 transition-all uppercase tracking-[0.2em] shadow-xl"
-        >
-          Reset Session
-        </button>
+        <div className="absolute bottom-10 right-10 z-[70] flex flex-col gap-3 items-end">
+          <button 
+            onClick={() => setIsMuted(prev => !prev)}
+            className={`px-8 py-3 backdrop-blur-lg border text-[10px] font-black rounded-full transition-all uppercase tracking-[0.2em] shadow-xl ${
+              isMuted 
+              ? 'bg-rose-500/20 border-rose-500/50 text-rose-400 hover:bg-rose-500 hover:text-white' 
+              : 'bg-slate-800/60 border-white/10 text-white hover:bg-white hover:text-slate-950'
+            }`}
+          >
+            {isMuted ? 'Muted' : 'Sound On'}
+          </button>
+          <button 
+            onClick={onRestart}
+            className="px-8 py-3 bg-slate-800/60 backdrop-blur-lg border border-white/10 text-white font-black text-[10px] rounded-full hover:bg-white hover:text-slate-950 transition-all uppercase tracking-[0.2em] shadow-xl"
+          >
+            Restart
+          </button>
+          <button 
+            onClick={onReturnMenu}
+            className="px-8 py-3 bg-slate-800/60 backdrop-blur-lg border border-white/10 text-white font-black text-[10px] rounded-full hover:bg-white hover:text-slate-950 transition-all uppercase tracking-[0.2em] shadow-xl"
+          >
+            Main Menu
+          </button>
+        </div>
       )}
 
       {!isLoaded && (

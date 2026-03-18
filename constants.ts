@@ -42,17 +42,33 @@ export interface Song {
   artist: string;
   bpm: number;
   url: string;
-  difficulty: 'Easy' | 'Medium' | 'Hard';
+  difficulty: 'Beginner' | 'Easy' | 'Medium' | 'Hard';
 }
 
 export const SONG_LIST: Song[] = [
   {
-    id: 'challenge_70',
-    title: 'Rhythm Challenge',
-    artist: 'Digital Maestro',
-    bpm: 70,
-    url: 'https://cdn.pixabay.com/audio/2022/03/10/audio_c8c8a7315b.mp3',
+    id: 'dian_guang',
+    title: '電光踏節奏',
+    artist: 'Jeff Lin',
+    bpm: 120, // 預設 120 BPM，可以依實際節奏再做修改
+    url: '/電光踏節奏.mp3',
     difficulty: 'Medium'
+  },
+  {
+    id: 'tiao_dao',
+    title: '跳到想你為止',
+    artist: 'Jeff Lin',
+    bpm: 85, // 較慢的節奏
+    url: '/跳到想你為止.mp3',
+    difficulty: 'Easy'
+  },
+  {
+    id: 'man_dong_zuo',
+    title: '慢動作的勇氣',
+    artist: 'Jeff Lin',
+    bpm: 60, // 最慢的節奏
+    url: '/慢動作的勇氣.mp3',
+    difficulty: 'Beginner'
   }
 ];
 
