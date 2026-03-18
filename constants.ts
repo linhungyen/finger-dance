@@ -51,7 +51,7 @@ export const SONG_LIST: Song[] = [
     title: '電光踏節奏',
     artist: 'Jeff Lin',
     bpm: 120, // 預設 120 BPM，可以依實際節奏再做修改
-    url: '/電光踏節奏.mp3',
+    url: './電光踏節奏.mp3',
     difficulty: 'Medium'
   },
   {
@@ -59,7 +59,7 @@ export const SONG_LIST: Song[] = [
     title: '跳到想你為止',
     artist: 'Jeff Lin',
     bpm: 85, // 較慢的節奏
-    url: '/跳到想你為止.mp3',
+    url: './跳到想你為止.mp3',
     difficulty: 'Easy'
   },
   {
@@ -67,7 +67,7 @@ export const SONG_LIST: Song[] = [
     title: '慢動作的勇氣',
     artist: 'Jeff Lin',
     bpm: 60, // 最慢的節奏
-    url: '/慢動作的勇氣.mp3',
+    url: './慢動作的勇氣.mp3',
     difficulty: 'Beginner'
   }
 ];

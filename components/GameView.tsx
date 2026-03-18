@@ -382,7 +382,7 @@ const GameView: React.FC<GameViewProps> = ({ selectedSong, handPreference, onUpd
 
   return (
     <div className="relative w-full h-full flex items-center justify-center">
-      <audio ref={audioRef} src={selectedSong.url} crossOrigin="anonymous" preload="auto" />
+      <audio ref={audioRef} src={selectedSong.url} preload="auto" />
       <video ref={videoRef} className="hidden" playsInline />
       
       <canvas 
