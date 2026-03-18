@@ -129,14 +129,21 @@ const GameView: React.FC<GameViewProps> = ({ selectedSong, handPreference, onUpd
             const thx = thumb.x * canvasRef.current!.width;
             const thy = thumb.y * canvasRef.current!.height;
 
+            // 動態獨立閾值設定
+            let pinchThreshold = PINCH_THRESHOLD_3D;
+            // 手機版畫面長寬比與電腦不同，距離會被放大，讓整體感應稍微嚴格一點 
+            if (window.innerWidth < 768) pinchThreshold *= 0.85;
+            // 食指 (index 0) 物理上離大拇指根部最近，鏡頭最容易擠在一起誤判，再額外嚴格化
+            if (index === 0) pinchThreshold *= 0.75;
+
             // 視覺回饋：當手指接近時，顯示連線（磁吸感）
             if (dist < PRE_PINCH_THRESHOLD) {
               const alpha = 1 - (dist / PRE_PINCH_THRESHOLD);
               ctx.beginPath();
               ctx.moveTo(thx, thy);
               ctx.lineTo(tx, ty);
-              ctx.strokeStyle = dist < PINCH_THRESHOLD_3D ? TRACK_COLORS[index] : `rgba(255,255,255,${alpha * 0.5})`;
-              ctx.lineWidth = dist < PINCH_THRESHOLD_3D ? 6 : 2;
+              ctx.strokeStyle = dist < pinchThreshold ? TRACK_COLORS[index] : `rgba(255,255,255,${alpha * 0.5})`;
+              ctx.lineWidth = dist < pinchThreshold ? 6 : 2;
               ctx.stroke();
 
               // 在指尖繪製偵測環
@@ -148,7 +155,7 @@ const GameView: React.FC<GameViewProps> = ({ selectedSong, handPreference, onUpd
             }
 
             // 判定觸發
-            if (dist < PINCH_THRESHOLD_3D) {
+            if (dist < pinchThreshold) {
               pRef[index] = true;
               
               // 觸發時的擴散圓圈視覺
